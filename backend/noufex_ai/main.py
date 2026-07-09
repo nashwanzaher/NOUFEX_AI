@@ -73,19 +73,36 @@ def create_app() -> FastAPI:
         title=settings.project_name,
         version=__version__,
         description="Multi-tenant AI agent platform with RAG, structured outputs, and observability built in.",
-        docs_url=settings.docs_url,
-        redoc_url=settings.redoc_url,
+        docs_url=settings.docs_url if not settings.is_production else None,
+        redoc_url=settings.redoc_url if not settings.is_production else None,
         openapi_url=f"{settings.api_v1_prefix}/openapi.json" if not settings.is_production else None,
         lifespan=lifespan,
     )
+
+    # CORS configuration - more restrictive in production
+    cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] if settings.is_production else ["*"]
+    cors_headers = [
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "DNT",
+        "Cache-Control",
+        "X-Mx-ReqToken",
+        "Keep-Alive",
+        "X-Requested-With",
+        "If-Modified-Since",
+        "X-Request-Id",
+    ] if settings.is_production else ["*"]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
         allow_credentials=settings.cors_allow_credentials,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["x-request-id"],
+        allow_methods=cors_methods,
+        allow_headers=cors_headers,
+        expose_headers=["x-request-id", "x-ratelimit-limit", "x-ratelimit-remaining"],
     )
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(RateLimitMiddleware)
@@ -120,6 +137,7 @@ def _register_routers(app: FastAPI) -> None:
     from noufex_ai.modules.computer.router import router as computer_router
     from noufex_ai.modules.browser.router import router as browser_router
     from noufex_ai.modules.design.router import router as design_router
+    from noufex_ai.modules.audit.router import router as audit_router
 
     prefix = settings.api_v1_prefix
     app.include_router(users_router, prefix=f"{prefix}/users", tags=["users"])
@@ -131,6 +149,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(computer_router, prefix=f"{prefix}/computer", tags=["computer"])
     app.include_router(browser_router, prefix=f"{prefix}/browser", tags=["browser"])
     app.include_router(design_router, prefix=f"{prefix}/design", tags=["design"])
+    app.include_router(audit_router, prefix=f"{prefix}/audit", tags=["audit"])
 
 
 app = create_app()

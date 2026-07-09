@@ -616,34 +616,19 @@ class ComputerService:
         return info
 
     def run_command(self, command: str, timeout: int = 30) -> dict[str, Any]:
-        """Run a shell command and return output."""
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            return {
-                "success": result.returncode == 0,
-                "returncode": result.returncode,
-                "stdout": result.stdout[:10000],
-                "stderr": result.stderr[:5000],
-            }
-        except subprocess.TimeoutExpired:
-            return {"success": False, "error": f"Command timed out after {timeout}s"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        """Run a shell command safely without shell=True to prevent injection."""
+        from noufex_ai.modules.security.validation import validate_command_safe
+        return validate_command_safe(command, timeout)
 
     # ── File Operations ────────────────────────────────────────────────
 
     def list_directory(self, path: str = ".") -> dict[str, Any]:
-        """List contents of a directory."""
+        """List contents of a directory with path validation."""
         try:
-            p = Path(path).expanduser().resolve()
-            if not p.exists():
-                return {"success": False, "error": f"Path does not exist: {path}"}
+            from noufex_ai.modules.security.validation import validate_path
+            p = validate_path(path, must_exist=True)
+            if not p.is_dir():
+                return {"success": False, "error": f"Path is not a directory: {path}"}
             items = []
             for child in p.iterdir():
                 items.append({
@@ -660,11 +645,10 @@ class ComputerService:
             return {"success": False, "error": str(e)}
 
     def read_file(self, path: str, max_size_kb: int = 100) -> dict[str, Any]:
-        """Read a file's contents."""
+        """Read a file's contents with path validation."""
         try:
-            p = Path(path).expanduser().resolve()
-            if not p.exists():
-                return {"success": False, "error": f"File not found: {path}"}
+            from noufex_ai.modules.security.validation import validate_path
+            p = validate_path(path, must_exist=True, must_be_file=True)
             if p.stat().st_size > max_size_kb * 1024:
                 return {"success": False, "error": f"File too large ({p.stat().st_size / 1024:.1f} KB)"}
             return {"success": True, "content": p.read_text(encoding="utf-8")}
@@ -672,9 +656,10 @@ class ComputerService:
             return {"success": False, "error": str(e)}
 
     def write_file(self, path: str, content: str) -> dict[str, Any]:
-        """Write content to a file."""
+        """Write content to a file with path validation."""
         try:
-            p = Path(path).expanduser().resolve()
+            from noufex_ai.modules.security.validation import validate_path
+            p = validate_path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content, encoding="utf-8")
             return {"success": True, "path": str(p), "size_bytes": p.stat().st_size}

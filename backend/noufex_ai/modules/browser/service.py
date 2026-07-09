@@ -150,11 +150,13 @@ class BrowserService:
             return {"success": False, "error": str(e)}
 
     async def navigate(self, url: str, wait_until: str = "load") -> dict[str, Any]:
-        """Navigate to a URL."""
+        """Navigate to a URL with validation."""
         if not self._page:
             return {"success": False, "error": "Browser not launched"}
         try:
-            response = await self._page.goto(url, wait_until=wait_until, timeout=30000)
+            from noufex_ai.modules.security.validation import validate_url
+            validated_url = validate_url(url)
+            response = await self._page.goto(validated_url, wait_until=wait_until, timeout=30000)
             status = response.status if response else None
             return {"success": True, "url": self._page.url, "status_code": status}
         except Exception as e:
@@ -280,11 +282,13 @@ class BrowserService:
             return {"success": False, "error": str(e)}
 
     async def evaluate(self, script: str) -> dict[str, Any]:
-        """Execute JavaScript in the page context."""
+        """Execute JavaScript in the page context with validation."""
         if not self._page:
             return {"success": False, "error": "Browser not launched"}
         try:
-            result = await self._page.evaluate(script)
+            from noufex_ai.modules.security.validation import validate_javascript
+            validated_script = validate_javascript(script)
+            result = await self._page.evaluate(validated_script)
             return {"success": True, "result": str(result)[:5000]}
         except Exception as e:
             return {"success": False, "error": str(e)}

@@ -38,7 +38,29 @@ class UserRead(BaseModel):
     full_name: str | None
     role: str
     is_active: bool
+    is_verified: bool
     created_at: datetime
     last_login_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., description="Email verification token")
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., description="Password reset token")
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ValidateResetTokenRequest(BaseModel):
+    token: str = Field(..., description="Password reset token to validate")

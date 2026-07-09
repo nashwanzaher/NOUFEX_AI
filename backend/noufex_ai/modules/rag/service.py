@@ -57,7 +57,15 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OV
 
 
 async def _get_embeddings(texts: list[str]) -> list[list[float]]:
-    try:
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((Exception,)),
+        reraise=True,
+    )
+    async def _get_embeddings_with_retry():
         client = _get_embedding_client()
         response = await client.embeddings.create(
             model=settings.openai_embedding_model,
@@ -65,9 +73,12 @@ async def _get_embeddings(texts: list[str]) -> list[list[float]]:
             dimensions=settings.openai_embedding_dimensions,
         )
         return [item.embedding for item in response.data]
+
+    try:
+        return await _get_embeddings_with_retry()
     except Exception as exc:
-        logger.error("Embedding generation failed: %s", exc)
-        raise UpstreamError(f"Failed to generate embeddings: {exc}") from exc
+        logger.error("Embedding generation failed after retries: %s", exc)
+        raise UpstreamError(f"Failed to generate embeddings after retries: {exc}") from exc
 
 
 async def _extract_text(file_path: str, mime_type: str) -> str:

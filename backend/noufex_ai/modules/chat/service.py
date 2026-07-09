@@ -283,11 +283,12 @@ class ChatService:
         messages_for_llm.extend(history)
         messages_for_llm.append({"role": "user", "content": request.message})
 
+        from noufex_ai.modules.utils.token_counter import count_tokens
         user_message = Message(
             conversation_id=conv.id,
             role="user",
             content=request.message,
-            token_count=len(request.message.split()),
+            token_count=count_tokens(request.message, model_used),
         )
         self.session.add(user_message)
         await self.session.flush()
@@ -371,11 +372,12 @@ class ChatService:
         messages_for_llm.extend(history)
         messages_for_llm.append({"role": "user", "content": request.message})
 
+        from noufex_ai.modules.utils.token_counter import count_tokens
         user_message = Message(
             conversation_id=conv.id,
             role="user",
             content=request.message,
-            token_count=len(request.message.split()),
+            token_count=count_tokens(request.message, model_used),
         )
         self.session.add(user_message)
         await self.session.flush()
@@ -520,18 +522,34 @@ class ChatService:
         max_tokens: int,
         tools: list[dict] | None,
     ):
-        client = _get_openai_client()
+        import asyncio
+        from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        if tools:
-            kwargs["tools"] = tools
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=1, max=10),
+            retry=retry_if_exception_type((Exception,)),
+            reraise=True,
+        )
+        async def _call_with_retry():
+            client = _get_openai_client()
 
-        return await client.chat.completions.create(**kwargs)
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if tools:
+                kwargs["tools"] = tools
+
+            return await client.chat.completions.create(**kwargs)
+
+        try:
+            return await _call_with_retry()
+        except Exception as exc:
+            logger.error("LLM call failed after retries: %s", exc)
+            raise UpstreamError(f"LLM request failed after retries: {exc}") from exc
 
     async def _stream_llm_with_tools(
         self,
@@ -554,7 +572,11 @@ class ChatService:
         if tools:
             kwargs["tools"] = tools
 
-        return await client.chat.completions.create(**kwargs)
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            logger.error("LLM stream call failed: %s", exc)
+            raise UpstreamError(f"LLM stream request failed: {exc}") from exc
 
     async def list_conversations(
         self, *, tenant_id: UUID, user_id: UUID, offset: int = 0, limit: int = 20

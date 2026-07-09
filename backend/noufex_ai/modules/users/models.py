@@ -33,6 +33,7 @@ class User(TimestampMixin, table=True):
     full_name: str | None = Field(default=None, sa_column=Column(String(255), nullable=True))
     role: str = Field(default="member", sa_column=Column(String(32), nullable=False))
     is_active: bool = Field(default=True)
+    is_verified: bool = Field(default=False)
     last_login_at: datetime | None = Field(default=None, nullable=True)
 
     tenant: "Tenant" = Relationship(back_populates="users")
@@ -40,6 +41,38 @@ class User(TimestampMixin, table=True):
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
+
+
+class EmailVerification(TimestampMixin, table=True):
+    __tablename__ = "email_verifications"
+    __table_args__ = (
+        Index("ix_email_verifications_user_id", "user_id"),
+        Index("ix_email_verifications_token", "token"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(
+        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    )
+    token: str = Field(sa_column=Column(String(128), nullable=False, unique=True))
+    expires_at: datetime
+    used_at: datetime | None = Field(default=None, nullable=True)
+
+
+class PasswordReset(TimestampMixin, table=True):
+    __tablename__ = "password_resets"
+    __table_args__ = (
+        Index("ix_password_resets_user_id", "user_id"),
+        Index("ix_password_resets_token", "token"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(
+        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    )
+    token: str = Field(sa_column=Column(String(128), nullable=False, unique=True))
+    expires_at: datetime
+    used_at: datetime | None = Field(default=None, nullable=True)
 
 
 class RefreshToken(TimestampMixin, table=True):
