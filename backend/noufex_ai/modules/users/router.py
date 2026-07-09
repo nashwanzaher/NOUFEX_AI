@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, status
@@ -27,6 +28,8 @@ from noufex_ai.modules.users.security import (
 )
 from noufex_ai.modules.users.service import UserService
 from noufex_ai.modules.users.email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -89,8 +92,6 @@ async def signup(
     verification_token = await email_service.create_verification(user.id)
     # TODO: Send email with verification_token
     # For now, log it
-    import logging
-    logger = logging.getLogger(__name__)
     logger.info("Email verification token for %s: %s", user.email, verification_token)
 
     return await _issue_tokens(
@@ -186,8 +187,6 @@ async def resend_verification(
     token = await email_service.resend_verification(str(payload.email))
     if token:
         # TODO: Send email with token
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info("Resent verification token for %s: %s", payload.email, token)
     # Always return success to prevent email enumeration
     return {"message": "If the email exists and is unverified, a verification link has been sent"}
@@ -203,8 +202,6 @@ async def forgot_password(
     token = await email_service.create_password_reset(str(payload.email))
     if token:
         # TODO: Send email with token
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info("Password reset token for %s: %s", payload.email, token)
     # Always return success to prevent email enumeration
     return {"message": "If the email exists, a password reset link has been sent"}

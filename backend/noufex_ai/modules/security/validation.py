@@ -63,19 +63,17 @@ def validate_path(path: str, *, must_exist: bool = False, must_be_file: bool = F
     if p.suffix.lower() in BLOCKED_EXTENSIONS:
         raise ValidationError(f"Access to '{p.suffix}' files is not allowed")
 
-    # Check for path traversal attempts
-    if ".." in path:
-        # After resolution, verify it's under allowed roots
-        under_allowed = False
-        for root in ALLOWED_ROOTS:
-            try:
-                p.relative_to(root)
-                under_allowed = True
-                break
-            except ValueError:
-                continue
-        if not under_allowed:
-            raise ValidationError("Path traversal detected: access denied")
+    # Always verify the resolved path is under an allowed root
+    under_allowed = False
+    for root in ALLOWED_ROOTS:
+        try:
+            p.relative_to(root)
+            under_allowed = True
+            break
+        except ValueError:
+            continue
+    if not under_allowed:
+        raise ValidationError("Access denied: path outside allowed directories")
 
     if must_exist and not p.exists():
         raise ValidationError(f"Path does not exist: {path}")

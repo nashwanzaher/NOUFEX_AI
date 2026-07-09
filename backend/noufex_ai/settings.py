@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator
+from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -120,6 +123,29 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.env == "production"
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self) -> Self:
+        """Validate that critical secrets are set in production."""
+        if self.is_production:
+            # Check secret key
+            if self.secret_key.get_secret_value() == "dev-insecure-change-me":
+                raise ValueError("SECRET_KEY must be set in production (cannot use default)")
+
+            # Check JWT keys for EdDSA
+            if self.jwt_algorithm == "EdDSA":
+                if not self.jwt_private_key:
+                    logger.warning("JWT_PRIVATE_KEY not set - JWT signing will fail")
+                if not self.jwt_public_key:
+                    logger.warning("JWT_PUBLIC_KEY not set - JWT verification will fail")
+
+            # Warn about missing optional services
+            if not self.openai_api_key:
+                logger.warning("OPENAI_API_KEY not set - AI features will be unavailable")
+            if not self.stripe_secret_key:
+                logger.warning("STRIPE_SECRET_KEY not set - billing features will be unavailable")
+
+        return self
 
 
 @lru_cache

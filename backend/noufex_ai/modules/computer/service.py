@@ -616,8 +616,11 @@ class ComputerService:
         return info
 
     def run_command(self, command: str, timeout: int = 30) -> dict[str, Any]:
-        """Run a shell command safely without shell=True to prevent injection."""
-        from noufex_ai.modules.security.validation import validate_command_safe
+        """Run a shell command safely with dangerous command validation."""
+        from noufex_ai.modules.security.validation import validate_command, validate_command_safe
+        # First validate against dangerous patterns
+        validate_command(command)
+        # Then run safely without shell=True
         return validate_command_safe(command, timeout)
 
     # ── File Operations ────────────────────────────────────────────────

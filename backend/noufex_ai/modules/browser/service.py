@@ -312,7 +312,7 @@ class BrowserService:
         if not self._page:
             return {"success": False, "error": "Browser not launched"}
         try:
-            await self._page.evaluate(f"window.scrollBy({x}, {y})")
+            await self._page.evaluate("window.scrollBy(arguments[0], arguments[1])", [x, y])
             return {"success": True, "scrolled_by": {"x": x, "y": y}}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -399,15 +399,18 @@ class BrowserService:
         if not self._page:
             return {"success": False, "error": "Browser not launched"}
         try:
+            from noufex_ai.modules.security.validation import validate_url
+            validated_url = validate_url(url)
+
             import httpx
             cookies = await self._page.context.cookies()
             cookie_dict = {c["name"]: c["value"] for c in cookies}
 
             async with httpx.AsyncClient(cookies=cookie_dict, follow_redirects=True) as client:
-                response = await client.get(url, timeout=30)
+                response = await client.get(validated_url, timeout=30)
                 response.raise_for_status()
 
-            dest = download_path or str(self._screenshot_dir / url.split("/")[-1])
+            dest = download_path or str(self._screenshot_dir / validated_url.split("/")[-1])
             with open(dest, "wb") as f:
                 f.write(response.content)
 

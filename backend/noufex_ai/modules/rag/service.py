@@ -5,7 +5,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -135,7 +135,7 @@ class RAGService:
 
         doc = Document(
             tenant_id=tenant_id,
-            filename=f"{UUID.bytes.hex}-{filename}",
+            filename=f"{uuid4().hex}-{filename}",
             original_filename=filename,
             mime_type=mime_type,
             file_size_bytes=file_size,
@@ -251,7 +251,11 @@ class RAGService:
         for chunk, distance in rows:
             score = 1.0 - distance  # convert distance to similarity
             if score >= request.score_threshold:
-                meta = json.loads(chunk.metadata_json) if chunk.metadata_json else None
+                try:
+                    meta = json.loads(chunk.metadata_json) if chunk.metadata_json else None
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse metadata_json for chunk %s", chunk.id)
+                    meta = None
                 results.append(
                     RAGChunkResult(
                         id=chunk.id,

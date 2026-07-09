@@ -101,10 +101,12 @@ async def stripe_webhook(request: Request, session: SessionDep) -> dict[str, Any
     from noufex_ai.settings import settings
 
     webhook_secret = settings.stripe_webhook_secret
-    if webhook_secret:
-        secret = webhook_secret.get_secret_value()
-        if not _verify_stripe_signature(body, signature, secret):
-            raise ValidationError("Invalid Stripe signature")
+    if not webhook_secret:
+        raise ValidationError("Webhook secret not configured - rejecting webhook")
+
+    secret = webhook_secret.get_secret_value()
+    if not _verify_stripe_signature(body, signature, secret):
+        raise ValidationError("Invalid Stripe signature")
 
     try:
         event = json.loads(body)

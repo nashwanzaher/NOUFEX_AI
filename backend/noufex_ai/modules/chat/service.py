@@ -144,7 +144,11 @@ class ChatService:
         for m in messages:
             entry: dict[str, Any] = {"role": m.role, "content": m.content}
             if m.tool_calls_json:
-                entry["tool_calls"] = json.loads(m.tool_calls_json)
+                try:
+                    entry["tool_calls"] = json.loads(m.tool_calls_json)
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse tool_calls_json for message %s", m.id)
+                    entry["tool_calls"] = []
             formatted.append(entry)
         return formatted
 
@@ -283,6 +287,8 @@ class ChatService:
         messages_for_llm.extend(history)
         messages_for_llm.append({"role": "user", "content": request.message})
 
+        model_used = agent.model if agent else settings.openai_default_model
+
         from noufex_ai.modules.utils.token_counter import count_tokens
         user_message = Message(
             conversation_id=conv.id,
@@ -292,8 +298,6 @@ class ChatService:
         )
         self.session.add(user_message)
         await self.session.flush()
-
-        model_used = agent.model if agent else settings.openai_default_model
 
         try:
             result = await self._chat_with_tools(
@@ -372,6 +376,8 @@ class ChatService:
         messages_for_llm.extend(history)
         messages_for_llm.append({"role": "user", "content": request.message})
 
+        model_used = agent.model if agent else settings.openai_default_model
+
         from noufex_ai.modules.utils.token_counter import count_tokens
         user_message = Message(
             conversation_id=conv.id,
@@ -382,7 +388,6 @@ class ChatService:
         self.session.add(user_message)
         await self.session.flush()
 
-        model_used = agent.model if agent else settings.openai_default_model
         full_content = ""
         total_tokens = 0
         tool_calls_executed: list[dict] = []
@@ -522,13 +527,17 @@ class ChatService:
         max_tokens: int,
         tools: list[dict] | None,
     ):
-        import asyncio
+        import openai
         from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
         @retry(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception_type((Exception,)),
+            retry=retry_if_exception_type((
+                openai.APITimeoutError,
+                openai.APIConnectionError,
+                openai.RateLimitError,
+            )),
             reraise=True,
         )
         async def _call_with_retry():

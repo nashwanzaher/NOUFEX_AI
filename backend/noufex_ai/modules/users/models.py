@@ -28,7 +28,7 @@ class User(TimestampMixin, table=True):
             nullable=False,
         )
     )
-    email: str = Field(sa_column=Column(String(255), nullable=False))
+    email: str = Field(sa_column=Column(String(255), nullable=False, unique=True))
     password_hash: str = Field(sa_column=Column(String(512), nullable=False))
     full_name: str | None = Field(default=None, sa_column=Column(String(255), nullable=True))
     role: str = Field(default="member", sa_column=Column(String(32), nullable=False))
